@@ -10,7 +10,7 @@ export default function JoinForm({
   sessionId: number;
   slug: string;
 }) {
-  const [state, formAction, isPending] = useActionState(joinSession, {});
+  const [state, formAction, isPending] = useActionState(joinSession, { error: "" });
 
   if (state?.success) {
     return (
