@@ -1,45 +1,48 @@
-import { createSession } from "@/app/actions/session";
+import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import db, { type Session } from "@/lib/db";
-import { formatCurrency } from "@/lib/utils";
+import { updateSession } from "@/app/actions/session";
 import Link from "next/link";
 
-export default function HomePage() {
-  // Fetch all sessions ordered by most recent first
-  const sessions = db
-    .prepare(`
-      SELECT s.*, COUNT(p.id) as player_count
-      FROM sessions s
-      LEFT JOIN players p ON p.session_id = s.id
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-    `)
-    .all() as (Session & { player_count: number })[];
+export default async function EditSessionPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+
+  const session = db
+    .prepare("SELECT * FROM sessions WHERE slug = ?")
+    .get(slug) as Session | undefined;
+
+  if (!session) {
+    notFound();
+  }
+
+  // Only captain can edit
+  const cookieStore = await cookies();
+  const currentPlayerName = cookieStore.get(`player_${slug}`)?.value ?? null;
+  if (currentPlayerName !== session.captain_name) {
+    redirect(`/session/${slug}`);
+  }
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-[22px] font-bold text-foreground mb-1">Create a Game</h1>
-        <p className="text-muted text-[14px]">
-          Book a court, invite your mates, split the cost fairly.
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-[20px] font-bold text-foreground">Edit Match</h1>
+        <Link
+          href={`/session/${slug}`}
+          className="text-[14px] text-primary font-medium"
+        >
+          Cancel
+        </Link>
       </div>
 
-      <form action={createSession}>
-        <div className="bg-surface rounded-2xl p-5 space-y-4">
-          <div>
-            <label htmlFor="captainName" className="block text-[13px] font-medium text-muted mb-1.5">
-              Your Name (Captain)
-            </label>
-            <input
-              type="text"
-              id="captainName"
-              name="captainName"
-              required
-              placeholder="e.g. James"
-              className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </div>
+      <form action={updateSession}>
+        <input type="hidden" name="sessionId" value={session.id} />
+        <input type="hidden" name="slug" value={slug} />
 
+        <div className="bg-surface rounded-2xl p-5 space-y-4">
           <div>
             <label htmlFor="courtName" className="block text-[13px] font-medium text-muted mb-1.5">
               Court / Venue Name
@@ -49,8 +52,8 @@ export default function HomePage() {
               id="courtName"
               name="courtName"
               required
-              placeholder="e.g. Urban Soccer Park"
-              className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              defaultValue={session.court_name}
+              className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
 
@@ -64,6 +67,7 @@ export default function HomePage() {
                 id="gameDate"
                 name="gameDate"
                 required
+                defaultValue={session.game_date}
                 className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -76,6 +80,7 @@ export default function HomePage() {
                 id="gameTime"
                 name="gameTime"
                 required
+                defaultValue={session.game_time}
                 className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -94,8 +99,8 @@ export default function HomePage() {
                 required
                 min="0"
                 step="0.01"
-                placeholder="0.00"
-                className="w-full rounded-xl bg-background border-0 pl-9 pr-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                defaultValue={session.total_price}
+                className="w-full rounded-xl bg-background border-0 pl-9 pr-4 py-3 text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
@@ -103,7 +108,6 @@ export default function HomePage() {
 
         <div className="bg-surface rounded-2xl p-5 space-y-4 mt-3">
           <p className="text-[13px] font-medium text-muted">Payment Details</p>
-          <p className="text-[12px] text-muted -mt-2">Members will see these details to pay you.</p>
 
           <div>
             <label htmlFor="payId" className="block text-[13px] font-medium text-muted mb-1.5">
@@ -113,7 +117,7 @@ export default function HomePage() {
               type="text"
               id="payId"
               name="payId"
-              required
+              defaultValue={session.pay_id ?? ""}
               placeholder="e.g. 0412345678 or email@example.com"
               className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -128,7 +132,7 @@ export default function HomePage() {
                 type="text"
                 id="bsb"
                 name="bsb"
-                required
+                defaultValue={session.bsb ?? ""}
                 placeholder="e.g. 062-000"
                 className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
@@ -141,7 +145,7 @@ export default function HomePage() {
                 type="text"
                 id="acc"
                 name="acc"
-                required
+                defaultValue={session.acc ?? ""}
                 placeholder="e.g. 1234 5678"
                 className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
@@ -154,8 +158,11 @@ export default function HomePage() {
 
           <div>
             <label htmlFor="receipt" className="block text-[13px] font-medium text-muted mb-1.5">
-              Payment Receipt
+              Update Receipt
             </label>
+            {session.receipt_path && (
+              <p className="text-[12px] text-muted mb-1">Current receipt uploaded. Upload a new one to replace it.</p>
+            )}
             <input
               type="file"
               id="receipt"
@@ -173,6 +180,7 @@ export default function HomePage() {
               type="text"
               id="location"
               name="location"
+              defaultValue={session.location ?? ""}
               placeholder="e.g. Google Maps link or address"
               className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
@@ -186,6 +194,7 @@ export default function HomePage() {
               id="notes"
               name="notes"
               rows={3}
+              defaultValue={session.notes ?? ""}
               placeholder="e.g. Bring shin guards, parking info..."
               className="w-full rounded-xl bg-background border-0 px-4 py-3 text-[15px] text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
             />
@@ -196,62 +205,9 @@ export default function HomePage() {
           type="submit"
           className="w-full rounded-2xl bg-primary px-4 py-4 text-[16px] font-semibold text-white hover:bg-primary-dark transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2 mt-4"
         >
-          Create Game Session
+          Save Changes
         </button>
       </form>
-
-      {/* Match History */}
-      {sessions.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-[18px] font-bold text-foreground mb-3">Match History</h2>
-          <div className="space-y-2">
-            {sessions.map((s) => {
-              const perPerson = s.player_count > 0 ? s.total_price / s.player_count : s.total_price;
-              const gameDate = new Date(s.game_date + "T00:00:00");
-              const isPast = gameDate < new Date(new Date().toDateString());
-
-              return (
-                <Link
-                  key={s.id}
-                  href={`/session/${s.slug}`}
-                  className="block bg-surface rounded-2xl p-4 hover:bg-background transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[15px] font-semibold text-foreground truncate">
-                          {s.court_name}
-                        </span>
-                        {isPast ? (
-                          <span className="inline-flex items-center rounded-md bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted shrink-0">
-                            Past
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary shrink-0">
-                            Upcoming
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[12px] text-muted mt-0.5">
-                        {gameDate.toLocaleDateString("en-AU", {
-                          weekday: "short", day: "numeric", month: "short",
-                        })}{" "}
-                        {s.game_time} &middot; {s.captain_name} &middot; {s.player_count} players
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <p className="text-[15px] font-bold text-primary">
-                        {formatCurrency(perPerson)}
-                      </p>
-                      <p className="text-[11px] text-muted">/person</p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
